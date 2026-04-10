@@ -32,15 +32,10 @@ class SentimentAnalyzer:
 
     def __init__(
         self,
-        model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest",
+        model_name: str = "SamLowe/roberta-base-go_emotions",
     ):
         self.model_name = model_name
         self._pipeline = None
-        self.labels_map = {
-            "positive": "positive",
-            "neutral": "neutral",
-            "negative": "negative",
-        }
 
     # ------------------------------------------------------------------
     # Lazy pipeline loader
@@ -65,13 +60,21 @@ class SentimentAnalyzer:
     def _get_continuous_score(
         self, results: List[Dict[str, Any]]
     ) -> Tuple[float, str, float]:
-        """Convert multi-label logits into a continuous -1 → +1 score."""
+        """Convert GoEmotions multi-label logits into a continuous -1 → +1 score."""
         scores = {res["label"]: res["score"] for res in results}
-        pos = scores.get("positive", 0.0)
-        neg = scores.get("negative", 0.0)
-        neu = scores.get("neutral", 0.0)
+        
+        positive_emotions = ["admiration", "amusement", "approval", "caring", "desire", "excitement", "gratitude", "joy", "love", "optimism", "pride", "relief"]
+        negative_emotions = ["anger", "annoyance", "disappointment", "disapproval", "disgust", "embarrassment", "fear", "grief", "nervousness", "remorse", "sadness"]
+        
+        pos = sum(scores.get(e, 0.0) for e in positive_emotions)
+        neg = sum(scores.get(e, 0.0) for e in negative_emotions)
+        neu = scores.get("neutral", 0.0) + sum(scores.get(e, 0.0) for e in ["confusion", "curiosity", "realization", "surprise"])
 
         continuous_score = pos - neg
+        
+        # Normalize continuous score between -1 and 1
+        continuous_score = max(-1.0, min(1.0, continuous_score))
+        
         max_score = max(pos, neg, neu)
         if max_score == pos:
             label = "positive"
@@ -80,7 +83,7 @@ class SentimentAnalyzer:
         else:
             label = "neutral"
 
-        return float(continuous_score), label, float(max_score)
+        return float(continuous_score), label, float(min(1.0, max_score))
 
     def _make_neutral(self, msg_id: int, sender: Optional[str]) -> MessageSentiment:
         return MessageSentiment(
@@ -115,7 +118,17 @@ class SentimentAnalyzer:
         for i, msg in enumerate(messages):
             if msg.is_media or not msg.content.strip():
                 continue
-            texts.append(msg.content[:_MAX_CHARS])
+                
+            # Context window: prefix with the previous message if it exists
+            context_text = ""
+            if i > 0 and not messages[i-1].is_media and messages[i-1].content.strip():
+                prev = messages[i-1]
+                context_text = f"[{prev.sender}]: {prev.content[:150]} \n "
+                
+            current_text = f"[{msg.sender}]: {msg.content[:_MAX_CHARS - len(context_text)]}"
+            combined_text = context_text + current_text
+            
+            texts.append(combined_text)
             msg_idx_map.append(i)
 
         # --- Step 2: Deduplicate for inference efficiency ---

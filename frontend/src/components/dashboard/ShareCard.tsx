@@ -78,15 +78,15 @@ export const ShareCard: React.FC<ShareCardProps> = ({ result, id }) => {
             <Users className="w-4 h-4" />
             <span className="text-[10px] font-bold uppercase tracking-widest">Key Participants</span>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            {result.participants.slice(0, 4).map((p, i) => (
+          <div className="flex flex-col gap-3">
+            {result.participants.slice(0, 3).map((p, i) => (
               <div key={i} className="flex items-center space-x-3 p-3 rounded-2xl bg-zinc-500/5 border border-zinc-500/10 hover:bg-zinc-500/10 transition-colors">
                 <div className="w-8 h-8 rounded-full bg-zinc-600/30 flex items-center justify-center font-black text-[10px] text-zinc-300 uppercase shrink-0">
                   {p.name.charAt(0)}
                 </div>
                 <div className="min-w-0 pr-2">
-                  <p className="font-bold text-xs text-white truncate truncate-ellipsis">{p.name}</p>
-                  <p className="text-[10px] text-zinc-300/50 font-bold uppercase truncate truncate-ellipsis">{p.badges[0] || 'Member'}</p>
+                  <p className="font-bold text-sm text-white break-words leading-tight">{p.name}</p>
+                  <p className="text-[10px] text-zinc-300/50 font-bold uppercase mt-0.5">{p.badges[0] || 'Member'}</p>
                 </div>
               </div>
             ))}

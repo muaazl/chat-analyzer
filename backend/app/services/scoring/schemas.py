@@ -30,11 +30,21 @@ class ParticipantScoring(BaseModel):
     ghost_level: ScoreMetadata
     yap_score: ScoreMetadata
     clown_factor: ScoreMetadata
+    chars_per_message: Optional[ScoreMetadata] = None
+    message_count: Optional[int] = None
     
     # Dyad Attributes
     simp_level: ScoreMetadata
     response_effort: ScoreMetadata
     apology_rate: ScoreMetadata
+    
+    # Fun Metrics
+    top_emojis: List[str] = Field(default_factory=list)
+    swear_count: int = 0
+    late_night_ratio: Optional[ScoreMetadata] = None
+    response_time: Optional[ScoreMetadata] = None
+    conversation_starter: Optional[ScoreMetadata] = None
+    question_ratio: Optional[ScoreMetadata] = None
     
     # Simple list of "badges" or "labels" for the UI
     badges: List[str] = Field(default_factory=list)

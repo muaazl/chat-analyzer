@@ -6,7 +6,6 @@ import { Sparkles, MessageSquare, Shield, Zap, RefreshCcw, AlertTriangle, Flame 
 import { ChatInputForm } from '@/components/input/ChatInputForm';
 import { TimelineChart } from '@/components/dashboard/TimelineChart';
 import { ParticipantCard } from '@/components/dashboard/ParticipantCard';
-import { ShareAction } from '@/components/dashboard/ShareAction';
 import { AnalysisSuccessResponse, ScoringResponse } from '@/types/analysis';
 import { analyzeText, analyzeFile } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -81,9 +80,7 @@ export default function Home() {
         {/* Header */}
         <header className="flex items-center justify-between mb-16">
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-lg bg-[var(--color-wa-green)] flex items-center justify-center shadow-sm">
-              <MessageSquare className="w-5 h-5 text-white fill-current" />
-            </div>
+            <img src="/favicon.svg" alt="Moodra" className="w-8 h-8 drop-shadow-sm" />
             <span className="text-xl font-black tracking-tighter text-zinc-800">Moodra</span>
           </div>
         </header>
@@ -103,7 +100,7 @@ export default function Home() {
                   AI-Powered Chat Analysis
                 </Badge>
                 <h1 className="text-5xl md:text-7xl font-black tracking-tight text-zinc-900 leading-[1.1]">
-                  What does your chat <br /> <span className="text-[var(--color-wa-teal)]">really say</span> about you?
+                  What does your chat <br /> <span className="text-[var(--color-wa-green)]">really say</span> about you?
                 </h1>
                 <p className="text-lg text-zinc-600 max-w-2xl mx-auto font-medium">
                   Drop your WhatsApp chat and find out who&apos;s the dry texter, who&apos;s the drama starter, and who&apos;s lowkey manipulative. 👀
@@ -172,7 +169,6 @@ export default function Home() {
                     <RefreshCcw className="w-4 h-4 mr-2" />
                     Reset
                   </Button>
-                  <ShareAction result={result} />
                 </div>
               </div>
 
@@ -192,9 +188,11 @@ export default function Home() {
               <TimelineChart data={result.timeline} />
 
               {/* Participants - Two Column */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="flex overflow-x-auto pb-6 -mx-4 px-4 snap-x snap-mandatory scroll-smooth lg:grid lg:grid-cols-2 lg:gap-8 lg:overflow-visible lg:pb-0 lg:mx-0 lg:px-0 hide-scrollbar">
                 {result.participants.map((p, i) => (
-                  <ParticipantCard key={i} participant={p} />
+                  <div key={i} className="w-[85vw] sm:w-[60vw] lg:w-auto snap-center shrink-0 mr-4 lg:mr-0 last:mr-0">
+                    <ParticipantCard participant={p} />
+                  </div>
                 ))}
               </div>
 

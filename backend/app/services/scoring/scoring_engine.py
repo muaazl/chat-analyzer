@@ -1,4 +1,5 @@
 import numpy as np
+import emoji
 from typing import List, Dict, Any, Optional
 from scipy.special import expit # sigmoid function for normalization
 
@@ -95,6 +96,8 @@ class ScoringEngine:
         for pm in preprocessed.messages:
             m_map[pm.message_id] = {
                 "text": pm.base_clean,
+                "raw_text": pm.raw.content,
+                "timestamp": pm.raw.timestamp,
                 "sender": pm.raw.sender,
                 "sentiment": None,
                 "toxicity": None,
@@ -123,6 +126,26 @@ class ScoringEngine:
         # Get baseline for normalization
         total_msgs = sum(p.messages_sent for p in speakers.participants)
         total_words = sum(p.words_total for p in speakers.participants)
+        
+        # Pre-compute dyadic chronological metrics (Response Time, Starters)
+        resp_times = {p.name: [] for p in speakers.participants}
+        starters = {p.name: 0 for p in speakers.participants}
+        
+        sorted_mids = sorted(msg_map.keys())
+        for i in range(1, len(sorted_mids)):
+            curr = msg_map[sorted_mids[i]]
+            prev = msg_map[sorted_mids[i-1]]
+            if not curr.get("timestamp") or not prev.get("timestamp"): continue
+            
+            tdelta = (curr["timestamp"] - prev["timestamp"]).total_seconds()
+            
+            if tdelta > 14400: # gap > 4 hours
+                if curr["sender"] in starters:
+                    starters[curr["sender"]] += 1
+                    
+            if curr["sender"] != prev["sender"] and tdelta < 14400:
+                if curr["sender"] in resp_times:
+                    resp_times[curr["sender"]].append(tdelta)
         
         for p_profile in speakers.participants:
             # A. Dominance calculation
@@ -213,6 +236,16 @@ class ScoringEngine:
             ghost_val = max(0.0, 1.0 - dom_val)
             ghost_level = ScoreMetadata(value=ghost_val, label=self._get_label_for_score(ghost_val, ["Always There", "Occasional", "Rare Appearance", "The Ghost"]), explanation="Present but rarely speaks.", confidence=0.8)
             
+            p_msgs = [data for mid, data in msg_map.items() if data.get("sender") == p_profile.name]
+            chars_sent = sum(len(m_data["text"]) for m_data in p_msgs)
+            cp_val = (chars_sent / len(p_msgs)) if p_msgs else 0.0
+            chars_per_message = ScoreMetadata(
+                value=min(1.0, cp_val / 150.0), # Normalize 150 chars to 1.0
+                label=f"{int(cp_val)} chars/msg",
+                explanation="Average characters typed per message.",
+                confidence=1.0
+            )
+
             yap_val = min(1.0, word_ratio * 2.0)
             yap_score = ScoreMetadata(value=yap_val, label=self._get_label_for_score(yap_val, ["Silent", "Talkative", "Yapper", "Chief Yapping Officer"]), explanation="High word volume.", confidence=0.9)
             
@@ -237,49 +270,98 @@ class ScoringEngine:
             if ghost_val > 0.8: badges.append("The Ghost")
             if pm_val > 0.7: badges.append("The Peacemaker")
             
+            # Fun Metrics Calculations
+            p_msgs = [data for mid, data in msg_map.items() if data.get("sender") == p_profile.name]
+            
+            # Emojis
+            emoji_counts = {}
+            for m in p_msgs:
+                for em in emoji.emoji_list(m["raw_text"]):
+                    char = em["emoji"]
+                    emoji_counts[char] = emoji_counts.get(char, 0) + 1
+            top_emojis = sorted(emoji_counts, key=emoji_counts.get, reverse=True)[:3]
+            
+            # Swear Jar
+            swear_words = {"fuck", "shit", "bitch", "damn", "ass", "hell", "crap", "stupid", "dumb", "dick"}
+            swear_count = sum(1 for m in p_msgs if any(sw in m["text"].lower() for sw in swear_words))
+            
+            # Late Night Ratio
+            late_msgs = sum(1 for m in p_msgs if m.get("timestamp") and 0 <= m["timestamp"].hour <= 4)
+            ln_ratio = late_msgs / max(1, len(p_msgs))
+            late_night_ratio = ScoreMetadata(
+                value=min(1.0, ln_ratio * 4),
+                label=self._get_label_for_score(min(1.0, ln_ratio * 4), ["Early Bird", "Standard", "Late Texter", "Night Owl"]),
+                explanation=f"{late_msgs} messages sent trailing past midnight.",
+                confidence=1.0
+            )
+            
+            # Question Asker
+            q_count = sum(1 for m in p_msgs if "?" in m["raw_text"])
+            q_ratio = q_count / max(1, len(p_msgs))
+            question_ratio = ScoreMetadata(
+                value=min(1.0, q_ratio * 3),
+                label=self._get_label_for_score(min(1.0, q_ratio * 3), ["Makes Statements", "Balanced", "Curious", "Asks Lots of Questions"]),
+                explanation=f"{q_count} questions asked.",
+                confidence=1.0
+            )
+            
+            # Response Time
+            p_times = resp_times.get(p_profile.name, [])
+            avg_resp = (sum(p_times) / len(p_times)) if p_times else 0
+            rt_val = min(1.0, avg_resp / 3600.0) 
+            response_time = ScoreMetadata(
+                value=rt_val,
+                label=self._get_label_for_score(rt_val, ["Speedy Texter", "Normal", "Slow", "Leaves on Read"]),
+                explanation=f"Average response time: {int(avg_resp // 60)} minutes.",
+                confidence=1.0
+            )
+            
+            # Conversation Starter
+            p_starters = starters.get(p_profile.name, 0)
+            st_val = min(1.0, p_starters / max(1, total_msgs * 0.05))
+            conversation_starter = ScoreMetadata(
+                value=st_val,
+                label=self._get_label_for_score(st_val, ["Follower", "Joins In", "Initiator", "Chat Starter"]),
+                explanation=f"Started the conversation {p_starters} times after long silences.",
+                confidence=1.0
+            )
+            
+            if ln_ratio > 0.2: badges.append("Night Owl")
+            if rt_val > 0.7: badges.append("Leaves on Read")
+            if st_val > 0.7: badges.append("Conversation Starter")
+            
             # H. Extract Notable Quotes (The Receipts)
             notable_quotes = []
             user_msgs = [(mid, data) for mid, data in msg_map.items() if data.get("sender") == p_profile.name]
             
             if user_msgs:
                 # 1. Biggest Red Flag (Max Toxicity)
-                red_flag_msg = max(user_msgs, key=lambda x: getattr(x[1].get("toxicity"), "score", 0.0) if x[1].get("toxicity") else 0.0, default=None)
-                if red_flag_msg and self._x_tox(red_flag_msg[1]) > 0.4:
-                     notable_quotes.append(NotableQuote(
-                         message_id=red_flag_msg[0], 
-                         text=red_flag_msg[1]["text"], 
-                         context="Biggest Red Flag 🚩"
-                     ))
+                rf_msgs = sorted(user_msgs, key=lambda x: self._x_tox(x[1]), reverse=True)
+                for m in rf_msgs[:4]:
+                    if self._x_tox(m[1]) > 0.4 and m[0] not in [q.message_id for q in notable_quotes]:
+                        notable_quotes.append(NotableQuote(message_id=m[0], text=m[1]["text"], context="Biggest Red Flag 🚩"))
 
                 # 2. Most Passive Aggressive
-                pa_msg = max(user_msgs, key=lambda x: getattr(x[1].get("tonality"), "passive_aggression_score", 0.0) if x[1].get("tonality") else 0.0, default=None)
-                if pa_msg and self._x_pa(pa_msg[1]) > 0.4 and pa_msg[0] not in [q.message_id for q in notable_quotes]:
-                     notable_quotes.append(NotableQuote(
-                         message_id=pa_msg[0], 
-                         text=pa_msg[1]["text"], 
-                         context="Passive Aggression 🙄"
-                     ))
+                pa_msgs = sorted(user_msgs, key=lambda x: self._x_pa(x[1]), reverse=True)
+                for m in pa_msgs[:4]:
+                    if self._x_pa(m[1]) > 0.4 and m[0] not in [q.message_id for q in notable_quotes]:
+                        notable_quotes.append(NotableQuote(message_id=m[0], text=m[1]["text"], context="Passive Aggression 🙄"))
 
-                # 3. Very Dry (filter short texts)
-                dry_msg = max(user_msgs, key=lambda x: getattr(x[1].get("tonality"), "dryness_score", 0.0) if x[1].get("tonality") else 0.0, default=None)
-                if dry_msg and self._x_dry(dry_msg[1]) > 0.5 and dry_msg[0] not in [q.message_id for q in notable_quotes]:
-                     notable_quotes.append(NotableQuote(
-                         message_id=dry_msg[0], 
-                         text=dry_msg[1]["text"], 
-                         context="Very Dry 🌵"
-                     ))
+                # 3. Very Dry
+                dry_msgs = sorted(user_msgs, key=lambda x: self._x_dry(x[1]), reverse=True)
+                for m in dry_msgs[:4]:
+                    if self._x_dry(m[1]) > 0.5 and m[0] not in [q.message_id for q in notable_quotes]:
+                        notable_quotes.append(NotableQuote(message_id=m[0], text=m[1]["text"], context="Very Dry 🌵"))
                      
-                # 4. Most Wholesome (Max Positive Sentiment)
-                wholesome_msg = max(user_msgs, key=lambda x: getattr(x[1].get("sentiment"), "score", 0.0) if x[1].get("sentiment") else 0.0, default=None)
-                if wholesome_msg and self._x_sent(wholesome_msg[1]) > 0.6 and wholesome_msg[0] not in [q.message_id for q in notable_quotes]:
-                     notable_quotes.append(NotableQuote(
-                         message_id=wholesome_msg[0], 
-                         text=wholesome_msg[1]["text"], 
-                         context="A Rare Wholesome Moment 💚"
-                     ))
+                # 4. Most Wholesome
+                wh_msgs = sorted(user_msgs, key=lambda x: self._x_sent(x[1]), reverse=True)
+                for m in wh_msgs[:4]:
+                    if self._x_sent(m[1]) > 0.6 and m[0] not in [q.message_id for q in notable_quotes]:
+                        notable_quotes.append(NotableQuote(message_id=m[0], text=m[1]["text"], context="A Rare Wholesome Moment 💚"))
                      
             results.append(ParticipantScoring(
                 name=p_profile.name,
+                message_count=len(p_msgs),
                 dominance=dominance,
                 effort_level=effort_level,
                 hidden_attitude=hidden_attitude,
@@ -289,11 +371,18 @@ class ScoringEngine:
                 peacemaker_index=peacemaker_index,
                 instigator_score=instigator_score,
                 ghost_level=ghost_level,
+                chars_per_message=chars_per_message,
                 yap_score=yap_score,
                 clown_factor=clown_factor,
                 simp_level=simp_level,
                 response_effort=response_effort,
                 apology_rate=apology_rate,
+                top_emojis=top_emojis,
+                swear_count=swear_count,
+                late_night_ratio=late_night_ratio,
+                response_time=response_time,
+                conversation_starter=conversation_starter,
+                question_ratio=question_ratio,
                 badges=badges,
                 notable_quotes=notable_quotes
             ))
@@ -350,6 +439,22 @@ class ScoringEngine:
         total_msgs = len(all_messages)
         msgs_per_bin = total_msgs / num_bins if num_bins > 0 else total_msgs
         
+        # Decide format based on time range
+        date_format = None
+        if total_msgs > 0 and hasattr(all_messages[0], 'raw') and hasattr(all_messages[-1], 'raw'):
+            try:
+                start_dt = all_messages[0].raw.timestamp
+                end_dt = all_messages[-1].raw.timestamp
+                days_span = (end_dt - start_dt).days if start_dt and end_dt else 0
+                if days_span > 365:
+                    date_format = "%b %Y"
+                elif days_span > 31:
+                    date_format = "%b"
+                else:
+                    date_format = "%b %d"
+            except Exception:
+                pass
+        
         for i, point in enumerate(sentiment.timeline):
             # Toxicity binning
             tox_start = int(i * bin_size)
@@ -369,8 +474,17 @@ class ScoringEngine:
             for name in participant_names:
                 participant_volumes[name] = sum(1 for m in bin_messages if m.raw.sender == name)
             
+            time_label = point.label
+            if date_format and bin_messages:
+                try:
+                    dt = bin_messages[0].raw.timestamp
+                    if dt:
+                        time_label = dt.strftime(date_format)
+                except Exception:
+                    pass
+                    
             timeline.append({
-                "time": point.label,
+                "time": time_label,
                 "sentiment": point.average_score,
                 "volume": point.volume,
                 "tension": tension_val,

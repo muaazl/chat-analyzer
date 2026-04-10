@@ -76,10 +76,8 @@ export const ShareAction: React.FC<ShareActionProps> = ({ result }) => {
       });
 
       // Create PDF with dimensions matching the captured content
-      // Use points (1 pt = 1/72 inch), scale image to reasonable width
-      const pdfWidth = 595; // ~A4 width in points, but height will be custom
-      const scale = pdfWidth / img.width;
-      const pdfHeight = img.height * scale;
+      const pdfWidth = img.width;
+      const pdfHeight = img.height;
 
       const pdf = new jsPDF({
         orientation: pdfWidth > pdfHeight ? 'landscape' : 'portrait',

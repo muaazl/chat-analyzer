@@ -21,14 +21,22 @@ export interface ParticipantScoring {
   red_flag_score: ScoreMetadata;
   peacemaker_index?: ScoreMetadata;
   instigator_score?: ScoreMetadata;
-  ghost_level?: ScoreMetadata;
+  chars_per_message?: ScoreMetadata;
   yap_score?: ScoreMetadata;
   clown_factor?: ScoreMetadata;
   simp_level?: ScoreMetadata;
   response_effort?: ScoreMetadata;
   apology_rate?: ScoreMetadata;
+  top_emojis?: string[];
+  swear_count?: number;
+  late_night_ratio?: ScoreMetadata;
+  response_time?: ScoreMetadata;
+  conversation_starter?: ScoreMetadata;
+  question_ratio?: ScoreMetadata;
+  
   badges: string[];
   notable_quotes: NotableQuote[];
+  message_count: number;
 }
 
 export interface SegmentScoring {

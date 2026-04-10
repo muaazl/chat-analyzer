@@ -18,16 +18,15 @@ interface TimelineChartProps {
   data: TimelinePoint[];
 }
 
-// Muted, professional palette for participant lines
 const LINE_COLORS = [
-  '#128C7E', // WhatsApp teal
-  '#075E54', // WhatsApp dark
-  '#6366f1', // Indigo
-  '#f59e0b', // Amber
-  '#ef4444', // Red
-  '#8b5cf6', // Purple
-  '#06b6d4', // Cyan
-  '#ec4899', // Pink
+  '#8B5A2B', // Ochre/Brown
+  '#556B2F', // Dark Olive Green
+  '#CD853F', // Peru (earthy orange)
+  '#8FBC8F', // Dark Sea Green
+  '#CD5C5C', // Indian Red
+  '#B8860B', // Dark Goldenrod
+  '#8B4513', // Saddle Brown
+  '#6B8E23', // Olive Drab
 ];
 
 export const TimelineChart: React.FC<TimelineChartProps> = ({ data }) => {
@@ -50,7 +49,7 @@ export const TimelineChart: React.FC<TimelineChartProps> = ({ data }) => {
   // Transform data for recharts — flatten participant_volumes into top-level keys
   const chartData = data.map((point, i) => {
     const entry: Record<string, any> = {
-      name: point.time.replace('Segment ', '#'),
+      name: point.time.startsWith('Segment') ? point.time.replace('Segment ', '#') : point.time,
     };
     if (hasParticipantData && point.participant_volumes) {
       for (const name of participantNames) {

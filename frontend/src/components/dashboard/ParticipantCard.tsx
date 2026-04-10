@@ -84,11 +84,26 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
             </AvatarFallback>
           </Avatar>
           <div className="space-y-1">
-            <h3 className="text-xl font-black text-zinc-900 tracking-tight">{participant.name}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-black text-zinc-900 tracking-tight">{participant.name}</h3>
+              {participant.top_emojis && participant.top_emojis.length > 0 && (
+                <span className="text-lg tracking-widest">{participant.top_emojis.join('')}</span>
+              )}
+            </div>
             <div className="flex flex-wrap gap-1.5 mt-1">
               <Badge className={`${verdictBg} ${verdictColor} border text-[10px] px-2.5 py-0.5 font-bold`}>
                 {verdictLabel}
               </Badge>
+              {participant.message_count !== undefined && (
+                <Badge variant="outline" className="text-zinc-500 bg-white/50 border-zinc-200 text-[10px] px-2 py-0.5 font-bold">
+                  {participant.message_count} Messages
+                </Badge>
+              )}
+              {participant.swear_count !== undefined && participant.swear_count > 0 && (
+                <Badge variant="outline" className="text-red-500 bg-red-50 border-red-200 text-[10px] px-2 py-0.5 font-bold">
+                  Swear Jar: {participant.swear_count}
+                </Badge>
+              )}
               {participant.badges.slice(0, 3).map((badge, idx) => (
                 <Badge
                   key={idx}
@@ -120,7 +135,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
                 <ScoreMetric subLabel="Volume" label="Yap Score" data={participant.yap_score} color="text-blue-600" />
                 <ScoreMetric subLabel="Drama" label="Instigator Score" data={participant.instigator_score!} color="text-red-500" />
                 <ScoreMetric subLabel="Harmony" label="Peacemaker Index" data={participant.peacemaker_index!} color="text-green-600" />
-                <ScoreMetric subLabel="Presence" label="Ghost Level" data={participant.ghost_level!} color="text-zinc-500" />
+                <ScoreMetric subLabel="Content" label="Chars / Msg" data={participant.chars_per_message!} color="text-indigo-600" />
               </>
             )}
             {participant.simp_level && (
@@ -129,6 +144,16 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
                 <ScoreMetric subLabel="Energy" label="Response Effort" data={participant.response_effort!} color="text-blue-500" />
               </>
             )}
+          </div>
+        )}
+
+        {/* Fun Stats */}
+        {(participant.response_time || participant.conversation_starter || participant.late_night_ratio || participant.question_ratio) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[var(--color-wa-bg)]/30 p-4 rounded-xl border border-black/5">
+            {participant.response_time && <ScoreMetric subLabel="Speed" label="Leaves on Read" data={participant.response_time} color="text-amber-500" />}
+            {participant.conversation_starter && <ScoreMetric subLabel="Initiative" label="Chat Starter" data={participant.conversation_starter} color="text-teal-500" />}
+            {participant.late_night_ratio && <ScoreMetric subLabel="Time Preference" label="Night Owl" data={participant.late_night_ratio} color="text-slate-600" />}
+            {participant.question_ratio && <ScoreMetric subLabel="Inquisitive" label="Asks Lots of Questions" data={participant.question_ratio} color="text-purple-500" />}
           </div>
         )}
 
@@ -146,18 +171,30 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = ({ participant })
              />
              
             {participant.notable_quotes && participant.notable_quotes.length > 0 ? (
-              participant.notable_quotes.map((quote, idx) => (
-                <div key={idx} className="flex flex-col items-start w-full relative z-10">
-                  <span className="text-[10px] font-bold text-zinc-500 mb-1 ml-1 uppercase tracking-wider">{quote.context}</span>
-                  <div className="relative max-w-[95%] sm:max-w-[85%] bg-white px-4 py-2.5 rounded-2xl rounded-tl-sm shadow-sm border border-black/5">
-                    <svg viewBox="0 0 8 13" width="8" height="13" className="absolute top-0 -left-[7px] text-white">
-                      <path opacity="0.1" d="M1.533,3.568L8,12.193V1H2.812 C1.042,1,0.474,2.156,1.533,3.568z"></path>
-                      <path fill="currentColor" d="M1.533,2.568L8,11.193V0H2.812 C1.042,0,0.474,1.156,1.533,2.568z"></path>
-                    </svg>
-                    <p className="text-[13px] text-[#111b21] leading-relaxed break-words">{quote.text}</p>
+              <div className="space-y-4 relative z-10 max-h-[400px] overflow-y-auto hide-scrollbar pb-2 pt-1">
+                {Object.entries(
+                  participant.notable_quotes.reduce((acc, quote) => {
+                    if (!acc[quote.context]) acc[quote.context] = [];
+                    acc[quote.context].push(quote);
+                    return acc;
+                  }, {} as Record<string, typeof participant.notable_quotes>)
+                ).map(([context, quotes], idx) => (
+                  <div key={idx} className="flex flex-col space-y-1">
+                    <span className="text-[10px] font-bold text-zinc-500 mb-1 ml-1 uppercase tracking-wider">{context}</span>
+                    <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 -mx-2 px-2 hide-scrollbar w-full gap-4">
+                      {quotes.map((quote, qIdx) => (
+                        <div key={qIdx} className="relative min-w-[85%] sm:min-w-[70%] snap-center shrink-0 bg-white px-4 py-2.5 rounded-2xl rounded-tl-sm shadow-sm border border-black/5">
+                          <svg viewBox="0 0 8 13" width="8" height="13" className="absolute top-0 -left-[7px] text-white">
+                            <path opacity="0.1" d="M1.533,3.568L8,12.193V1H2.812 C1.042,1,0.474,2.156,1.533,3.568z"></path>
+                            <path fill="currentColor" d="M1.533,2.568L8,11.193V0H2.812 C1.042,0,0.474,1.156,1.533,2.568z"></path>
+                          </svg>
+                          <p className="text-[13px] text-[#111b21] leading-relaxed break-words whitespace-pre-wrap max-h-[120px] overflow-y-auto hide-scrollbar">{quote.text}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-6 relative z-10">
                 <MessageSquare className="w-6 h-6 text-zinc-300 mb-2" />
