@@ -23,13 +23,18 @@ def test_sentiment_analyzer_logic():
         mock_pipeline.return_value = mock_pipe_instance
         
         # Return positive for "happy", negative for "sad"
-        def side_effect(content):
-            if "happy" in content:
-                return [[{"label": "positive", "score": 0.9}, {"label": "neutral", "score": 0.05}, {"label": "negative", "score": 0.05}]]
-            elif "sad" in content:
-                return [[{"label": "negative", "score": 0.9}, {"label": "neutral", "score": 0.05}, {"label": "positive", "score": 0.05}]]
-            else:
-                return [[{"label": "neutral", "score": 0.9}, {"label": "positive", "score": 0.05}, {"label": "negative", "score": 0.05}]]
+        def side_effect(texts, **kwargs):
+            results = []
+            for text in texts:
+                # The analyzer prepends context, so we look at the last line (the current message)
+                current_msg = text.split("\n")[-1]
+                if "happy" in current_msg:
+                    results.append([{"label": "joy", "score": 0.9}, {"label": "neutral", "score": 0.05}, {"label": "sadness", "score": 0.05}])
+                elif "sad" in current_msg:
+                    results.append([{"label": "sadness", "score": 0.9}, {"label": "neutral", "score": 0.05}, {"label": "joy", "score": 0.05}])
+                else:
+                    results.append([{"label": "neutral", "score": 0.9}, {"label": "joy", "score": 0.05}, {"label": "sadness", "score": 0.05}])
+            return results
         
         mock_pipe_instance.side_effect = side_effect
         
@@ -73,8 +78,10 @@ def test_media_omitted_handling():
     
     # Logic should skip pipeline for media
     with patch("app.services.nlp.sentiment_analyzer.SentimentAnalyzer.pipeline") as mock_pipe:
-        res = analyzer.analyze_message(msg, 0)
+        response = analyzer.analyze_chat([msg])
+        res = response.messages[0]
         assert res.label == "neutral"
         assert res.score == 0.0
         assert res.confidence == 0.0
+        # Pipeline should not be called since there are no unique_texts to process
         mock_pipe.assert_not_called()
